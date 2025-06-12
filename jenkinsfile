@@ -1,33 +1,57 @@
 pipeline {
-    agent any
+  agent any
 
-    environment {
-        AWS_DEFAULT_REGION = 'us-east-1'
+  environment {
+    AWS_REGION = 'us-east-1'
+    S3_BUCKET = 'lambda-upload-bucket-1aa59ce9'
+    FUNCTION_NAME = 'lambda_function.py'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        git 'https://github.com/your-user/your-lambda-repo.git'
+      }
     }
 
-    stages {
-        stage('Prepare') {
-            steps {
-                sh 'zip lambda.zip lambda_function.py'
-            }
-        }
-
-        stage('Terraform Init') {
-            steps {
-                sh 'terraform init -input=false'
-            }
-        }
-
-        stage('Terraform Plan') {
-            steps {
-                sh 'terraform plan -out=tfplan'
-            }
-        }
-
-        stage('Terraform Apply') {
-            steps {
-                sh 'terraform apply -auto-approve tfplan'
-            }
-        }
+    stage('Terraform Init & Plan') {
+      steps {
+        sh '''
+          cd terraform
+          terraform init
+          terraform plan -out=tfplan
+        '''
+      }
     }
+
+    stage('Terraform Apply') {
+      steps {
+        input message: "Approve infrastructure changes?"
+        sh '''
+          cd terraform
+          terraform apply -auto-approve tfplan
+        '''
+      }
+    }
+
+    stage('Deploy Lambda') {
+      steps {
+        sh '''
+          cd lambda
+          zip function.zip lambda_function.py
+          aws s3 cp function.zip s3://$S3_BUCKET/
+          aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key function.zip --region $AWS_REGION
+        '''
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo 'Build failed!'
+    }
+    success {
+      echo 'Deployment complete!'
+    }
+  }
 }

@@ -67,15 +67,16 @@ resource "aws_instance" "jenkins" {
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
 
-  root_block_device {
-    volume_size = 16
-    volume_type = "gp2"
-    delete_on_termination = true
-  }
-
   user_data = <<-EOF
               #!/bin/bash
               dnf update -y
+
+              # Fix /tmp: Create a 4GB loop-mounted ext4 volume
+              mkdir -p /mnt/tmpdisk
+              dd if=/dev/zero of=/mnt/tmpdisk/tmpfile bs=1M count=4096
+              mkfs.ext4 /mnt/tmpdisk/tmpfile
+              mount -o loop /mnt/tmpdisk/tmpfile /tmp
+              echo "/mnt/tmpdisk/tmpfile /tmp ext4 loop 0 0" >> /etc/fstab
 
               # Install Java for Jenkins
               dnf install java-17-amazon-corretto -y
@@ -102,6 +103,11 @@ resource "aws_instance" "jenkins" {
 
   tags = {
     Name = "JenkinsServer"
+  }
+
+  root_block_device {
+    volume_size = 16
+    volume_type = "gp3"
   }
 }
 
