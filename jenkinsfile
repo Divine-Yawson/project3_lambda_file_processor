@@ -10,7 +10,8 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
-       git credentialsId: 'github-credentials', url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
+       git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
+
       }
     }
 
