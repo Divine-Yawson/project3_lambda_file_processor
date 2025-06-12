@@ -1,0 +1,42 @@
+# Byte-compiled / compiled files
+__pycache__/
+*.py[cod]
+*.zip
+
+# Lambda packages
+lambda.zip
+
+# Terraform state
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+
+# Local env files
+.env
+*.pem
+*.key
+
+# VS Code settings
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# AWS credentials (NEVER commit these!)
+*.aws
+.aws/
+
+# Logs
+*.log
+
+# Jenkins
+secrets/
+init.groovy.d/
+jobs/
+workspace/
+builds/
+logs/
+jenkins.out
