@@ -25,7 +25,7 @@ pipeline {
     stage('Terraform Init') {
       steps {
         sh """
-          cd ${TF_DIR}
+         cd lambda-processor
           terraform init -input=false
         """
       }
@@ -34,7 +34,7 @@ pipeline {
     stage('Terraform Plan') {
       steps {
         sh """
-          cd ${TF_DIR}
+          cd lambda-processor
           terraform plan -out=tfplan -input=false
         """
         archiveArtifacts "${TF_DIR}/tfplan"  // Save the plan file
@@ -46,7 +46,7 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES') {
           input message: "Approve Terraform changes?"
           sh """
-            cd ${TF_DIR}
+            cd lambda-processor
             terraform apply -input=false -auto-approve tfplan
           """
         }
