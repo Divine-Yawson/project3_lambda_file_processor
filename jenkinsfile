@@ -3,8 +3,6 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-1'
-    S3_BUCKET = '' // Not needed unless you're using AWS CLI to upload manually
-    FUNCTION_NAME = 'FileProcessor'
   }
 
   stages {
@@ -19,6 +17,7 @@ pipeline {
         sh '''
           cd lambda-processor
           zip lambda.zip lambda_function.py
+          ls -lah
         '''
       }
     }
@@ -43,7 +42,6 @@ pipeline {
 
     stage('Terraform Apply') {
       steps {
-        input message: "Approve infrastructure changes?"
         sh '''
           cd lambda-processor
           terraform apply -auto-approve tfplan
@@ -53,11 +51,11 @@ pipeline {
   }
 
   post {
-    failure {
-      echo 'Build failed.'
-    }
     success {
-      echo 'Deployment complete.'
+      echo '✅ Deployment Complete!'
+    }
+    failure {
+      echo '❌ Build Failed. Check logs.'
     }
   }
 }
