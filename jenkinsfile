@@ -3,6 +3,7 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-1'
+    S3_BUCKET = '' // Not needed unless you're using AWS CLI to upload manually
     FUNCTION_NAME = 'FileProcessor'
   }
 
@@ -10,6 +11,15 @@ pipeline {
     stage('Checkout') {
       steps {
         git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
+      }
+    }
+
+    stage('Prepare Lambda Zip') {
+      steps {
+        sh '''
+          cd lambda-processor
+          zip lambda.zip lambda_function.py
+        '''
       }
     }
 
@@ -40,37 +50,14 @@ pipeline {
         '''
       }
     }
-
-    stage('Get Terraform Output') {
-      steps {
-        script {
-          def bucketName = sh(
-            script: "cd lambda-processor && terraform output -raw s3_bucket_name",
-            returnStdout: true
-          ).trim()
-          env.S3_BUCKET = bucketName
-          echo "S3 bucket from Terraform: ${env.S3_BUCKET}"
-        }
-      }
-    }
-
-    stage('Upload File to Trigger Lambda') {
-      steps {
-        sh '''
-          cd lambda-processor
-          zip test_file.zip lambda_function.py
-          aws s3 cp test_file.zip s3://$S3_BUCKET/
-        '''
-      }
-    }
   }
 
   post {
-    success {
-      echo '✅ Deployment complete and file uploaded to S3.'
-    }
     failure {
-      echo '❌ Build failed!'
+      echo 'Build failed.'
+    }
+    success {
+      echo 'Deployment complete.'
     }
   }
 }
