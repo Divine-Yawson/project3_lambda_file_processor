@@ -3,70 +3,84 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-1'
-    FUNCTION_NAME = 'FileProcessor' // keep this consistent with your .tf file
+    FUNCTION_NAME = 'FileProcessor'
+    TF_DIR = 'lambda-processor'  // This defines where your Terraform files live
   }
 
   stages {
     stage('Checkout') {
       steps {
-        git branch: 'main',
+        checkout([
+          $class: 'GitSCM',
+          branches: [[name: 'main']],
+          extensions: [],
+          userRemoteConfigs: [[
             credentialsId: 'github-credentials',
             url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
+          ]]
+        ])
       }
     }
 
     stage('Terraform Init') {
       steps {
-        sh '''
-          cd lambda-processor
-          terraform init
-        '''
+        sh """
+          cd ${TF_DIR}
+          terraform init -input=false
+        """
       }
     }
 
     stage('Terraform Plan') {
       steps {
-        sh '''
-          cd lambda-processor
-          terraform plan -out=tfplan
-        '''
+        sh """
+          cd ${TF_DIR}
+          terraform plan -out=tfplan -input=false
+        """
+        archiveArtifacts "${TF_DIR}/tfplan"  // Save the plan file
       }
     }
 
     stage('Terraform Apply') {
       steps {
-        input message: "Approve infrastructure changes?"
-        sh '''
-          cd lambda-processor
-          terraform apply -auto-approve tfplan
-        '''
+        timeout(time: 30, unit: 'MINUTES') {
+          input message: "Approve Terraform changes?"
+          sh """
+            cd ${TF_DIR}
+            terraform apply -input=false -auto-approve tfplan
+          """
+        }
       }
     }
 
-    // Optional Lambda re-deployment stage
-    // Uncomment if you want Jenkins to re-zip/upload/update the Lambda function
-    /*
-    stage('Deploy Lambda') {
+    stage('Deploy Lambda Code') {
+      when {
+        expression { 
+          return fileExists("${TF_DIR}/lambda_function.py") 
+        }
+      }
       steps {
-        sh '''
-          cd lambda-processor
-          zip lambda.zip lambda_function.py
-          aws lambda update-function-code \
-            --function-name $FUNCTION_NAME \
-            --zip-file fileb://lambda.zip \
-            --region $AWS_REGION
-        '''
+        sh """
+          cd ${TF_DIR}
+          zip -r lambda.zip lambda_function.py
+          aws lambda update-function-code \\
+            --function-name ${FUNCTION_NAME} \\
+            --zip-file fileb://lambda.zip \\
+            --region ${AWS_REGION}
+        """
       }
     }
-    */
   }
 
   post {
+    always {
+      cleanWs()
+    }
     success {
-      echo 'Infrastructure deployed successfully!'
+      echo "Successfully deployed ${FUNCTION_NAME} to ${AWS_REGION}"
     }
     failure {
-      echo 'Build failed. Check logs above.'
+      echo "Failed to deploy ${FUNCTION_NAME}. Check logs above."
     }
   }
 }
