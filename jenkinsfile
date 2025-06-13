@@ -2,7 +2,9 @@ pipeline {
   agent any
 
   environment {
-    AWS_DEFAULT_REGION = 'us-east-1'
+    AWS_REGION = 'us-east-1'
+    S3_BUCKET = 'lambda-upload-bucket-1ac95f56'  // Use the correct bucket name here
+    FUNCTION_NAME = 'FileProcessor'
   }
 
   stages {
@@ -15,6 +17,7 @@ pipeline {
     stage('Prepare Lambda Zip') {
       steps {
         sh '''
+          which zip || yum install -y zip
           cd lambda-processor
           zip lambda.zip lambda_function.py
         '''
@@ -23,10 +26,7 @@ pipeline {
 
     stage('Terraform Init & Plan') {
       steps {
-        withCredentials([
-          string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
-          string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
-        ]) {
+        withAWS(credentials: 'aws-access-key', region: "${AWS_REGION}") {
           sh '''
             cd lambda-processor
             terraform init
@@ -39,10 +39,7 @@ pipeline {
     stage('Terraform Apply') {
       steps {
         input message: "Approve apply?"
-        withCredentials([
-          string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
-          string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
-        ]) {
+        withAWS(credentials: 'aws-access-key', region: "${AWS_REGION}") {
           sh '''
             cd lambda-processor
             terraform apply -auto-approve tfplan -lock=false
@@ -53,18 +50,11 @@ pipeline {
 
     stage('Update Lambda Function') {
       steps {
-        withCredentials([
-          string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
-          string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
-        ]) {
+        withAWS(credentials: 'aws-access-key', region: "${AWS_REGION}") {
           sh '''
             cd lambda-processor
             aws s3 cp lambda.zip s3://$S3_BUCKET/
-            aws lambda update-function-code \
-              --function-name $FUNCTION_NAME \
-              --s3-bucket $S3_BUCKET \
-              --s3-key lambda.zip \
-              --region $AWS_DEFAULT_REGION
+            aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key lambda.zip --region $AWS_REGION
           '''
         }
       }
@@ -73,10 +63,10 @@ pipeline {
 
   post {
     failure {
-      echo 'Build failed!'
+      echo '❌ Build failed!'
     }
     success {
-      echo 'Deployment complete!'
+      echo '✅ Deployment complete!'
     }
   }
 }
