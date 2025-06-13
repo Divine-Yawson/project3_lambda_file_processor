@@ -2,11 +2,7 @@ pipeline {
   agent any
 
   environment {
-    AWS_ACCESS_KEY_ID = credentials('aws-access-key')
-    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
     AWS_DEFAULT_REGION = 'us-east-1'
-    S3_BUCKET = 'lambda-upload-bucket-1aa59ce9'
-    FUNCTION_NAME = 'FileProcessor'
   }
 
   stages {
@@ -21,7 +17,6 @@ pipeline {
         sh '''
           sudo yum install -y zip || true
           cd lambda-processor
-          rm -f lambda.zip
           zip lambda.zip lambda_function.py
         '''
       }
@@ -29,31 +24,50 @@ pipeline {
 
     stage('Terraform Init & Plan') {
       steps {
-        sh '''
-          cd lambda-processor
-          terraform init
-          terraform plan -out=tfplan -input=false -lock=false
-        '''
+        withCredentials([
+          string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+          string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+        ]) {
+          sh '''
+            cd lambda-processor
+            terraform init
+            terraform plan -out=tfplan -input=false -lock=false
+          '''
+        }
       }
     }
 
     stage('Terraform Apply') {
       steps {
         input message: "Approve apply?"
-        sh '''
-          cd lambda-processor
-          terraform apply -auto-approve tfplan -lock=false
-        '''
+        withCredentials([
+          string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+          string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+        ]) {
+          sh '''
+            cd lambda-processor
+            terraform apply -auto-approve tfplan -lock=false
+          '''
+        }
       }
     }
 
     stage('Update Lambda Function') {
       steps {
-        sh '''
-          cd lambda-processor
-          aws s3 cp lambda.zip s3://$S3_BUCKET/
-          aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key lambda.zip --region $AWS_DEFAULT_REGION
-        '''
+        withCredentials([
+          string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+          string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+        ]) {
+          sh '''
+            cd lambda-processor
+            aws s3 cp lambda.zip s3://$S3_BUCKET/
+            aws lambda update-function-code \
+              --function-name $FUNCTION_NAME \
+              --s3-bucket $S3_BUCKET \
+              --s3-key lambda.zip \
+              --region $AWS_DEFAULT_REGION
+          '''
+        }
       }
     }
   }
