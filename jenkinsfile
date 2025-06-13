@@ -3,6 +3,8 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-1'
+    S3_BUCKET = 'lambda-upload-bucket-1aa59ce9'
+    FUNCTION_NAME = 'FileProcessor'
   }
 
   stages {
@@ -15,47 +17,50 @@ pipeline {
     stage('Prepare Lambda Zip') {
       steps {
         sh '''
+          sudo yum install -y zip || true
           cd lambda-processor
           zip lambda.zip lambda_function.py
-          ls -lah
         '''
       }
     }
 
-    stage('Terraform Init') {
+    stage('Terraform Init & Plan') {
       steps {
         sh '''
           cd lambda-processor
           terraform init
-        '''
-      }
-    }
-
-    stage('Terraform Plan') {
-      steps {
-        sh '''
-          cd lambda-processor
-          terraform plan -out=tfplan -input=false
+          terraform plan -out=tfplan -input=false -lock=false
         '''
       }
     }
 
     stage('Terraform Apply') {
       steps {
+        input message: "Approve apply?"
         sh '''
           cd lambda-processor
-          terraform apply -auto-approve tfplan
+          terraform apply -auto-approve tfplan -lock=false
+        '''
+      }
+    }
+
+    stage('Update Lambda Function') {
+      steps {
+        sh '''
+          cd lambda-processor
+          aws s3 cp lambda.zip s3://$S3_BUCKET/
+          aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key lambda.zip --region $AWS_REGION
         '''
       }
     }
   }
 
   post {
-    success {
-      echo '✅ Deployment Complete!'
-    }
     failure {
-      echo '❌ Build Failed. Check logs.'
+      echo 'Build failed!'
+    }
+    success {
+      echo 'Deployment complete!'
     }
   }
 }
