@@ -81,6 +81,9 @@ resource "aws_instance" "jenkins" {
               # Install Java for Jenkins
               dnf install java-17-amazon-corretto -y
 
+              # install zip
+              sudo yum install -y zip
+
               # Install Jenkins
               dnf install wget -y
               wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
