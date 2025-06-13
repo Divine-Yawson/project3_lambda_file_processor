@@ -63,10 +63,10 @@ pipeline {
 
   post {
     success {
-      echo '✅ Infrastructure deployed successfully!'
+      echo 'Infrastructure deployed successfully!'
     }
     failure {
-      echo '❌ Build failed. Check logs above.'
+      echo 'Build failed. Check logs above.'
     }
   }
 }
