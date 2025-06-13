@@ -4,83 +4,73 @@ pipeline {
   environment {
     AWS_REGION = 'us-east-1'
     FUNCTION_NAME = 'FileProcessor'
-    TF_DIR = 'lambda-processor'  // This defines where your Terraform files live
   }
 
   stages {
     stage('Checkout') {
       steps {
-        checkout([
-          $class: 'GitSCM',
-          branches: [[name: 'main']],
-          extensions: [],
-          userRemoteConfigs: [[
-            credentialsId: 'github-credentials',
-            url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
-          ]]
-        ])
+        git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
       }
     }
 
     stage('Terraform Init') {
       steps {
-        sh """
-         cd lambda-processor
-          terraform init -input=false
-        """
+        sh '''
+          cd lambda-processor
+          terraform init
+        '''
       }
     }
 
     stage('Terraform Plan') {
       steps {
-        sh """
+        sh '''
           cd lambda-processor
           terraform plan -out=tfplan -input=false
-        """
-        archiveArtifacts "${TF_DIR}/tfplan"  // Save the plan file
+        '''
       }
     }
 
     stage('Terraform Apply') {
       steps {
-        timeout(time: 30, unit: 'MINUTES') {
-          input message: "Approve Terraform changes?"
-          sh """
-            cd lambda-processor
-            terraform apply -input=false -auto-approve tfplan
-          """
+        input message: "Approve infrastructure changes?"
+        sh '''
+          cd lambda-processor
+          terraform apply -auto-approve tfplan
+        '''
+      }
+    }
+
+    stage('Get Terraform Output') {
+      steps {
+        script {
+          def bucketName = sh(
+            script: "cd lambda-processor && terraform output -raw s3_bucket_name",
+            returnStdout: true
+          ).trim()
+          env.S3_BUCKET = bucketName
+          echo "S3 bucket from Terraform: ${env.S3_BUCKET}"
         }
       }
     }
 
-    stage('Deploy Lambda Code') {
-      when {
-        expression { 
-          return fileExists("${TF_DIR}/lambda_function.py") 
-        }
-      }
+    stage('Upload File to Trigger Lambda') {
       steps {
-        sh """
-          cd ${TF_DIR}
-          zip -r lambda.zip lambda_function.py
-          aws lambda update-function-code \\
-            --function-name ${FUNCTION_NAME} \\
-            --zip-file fileb://lambda.zip \\
-            --region ${AWS_REGION}
-        """
+        sh '''
+          cd lambda-processor
+          zip test_file.zip lambda_function.py
+          aws s3 cp test_file.zip s3://$S3_BUCKET/
+        '''
       }
     }
   }
 
   post {
-    always {
-      cleanWs()
-    }
     success {
-      echo "Successfully deployed ${FUNCTION_NAME} to ${AWS_REGION}"
+      echo '✅ Deployment complete and file uploaded to S3.'
     }
     failure {
-      echo "Failed to deploy ${FUNCTION_NAME}. Check logs above."
+      echo '❌ Build failed!'
     }
   }
 }
