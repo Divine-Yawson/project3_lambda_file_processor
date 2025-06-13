@@ -15,7 +15,6 @@ pipeline {
     stage('Prepare Lambda Zip') {
       steps {
         sh '''
-          sudo yum install -y zip || true
           cd lambda-processor
           zip lambda.zip lambda_function.py
         '''
