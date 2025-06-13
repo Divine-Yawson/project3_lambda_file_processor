@@ -3,23 +3,31 @@ pipeline {
 
   environment {
     AWS_REGION = 'us-east-1'
-    S3_BUCKET = 'lambda-upload-bucket-1aa59ce9'
-    FUNCTION_NAME = 'lambda_function.py'
+    FUNCTION_NAME = 'FileProcessor' // keep this consistent with your .tf file
   }
 
   stages {
     stage('Checkout') {
       steps {
-       git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
-
+        git branch: 'main',
+            credentialsId: 'github-credentials',
+            url: 'https://github.com/Divine-Yawson/project3_lambda_file_processor.git'
       }
     }
 
-    stage('Terraform Init & Plan') {
+    stage('Terraform Init') {
       steps {
         sh '''
-          cd terraform
+          cd lambda-processor
           terraform init
+        '''
+      }
+    }
+
+    stage('Terraform Plan') {
+      steps {
+        sh '''
+          cd lambda-processor
           terraform plan -out=tfplan
         '''
       }
@@ -29,30 +37,36 @@ pipeline {
       steps {
         input message: "Approve infrastructure changes?"
         sh '''
-          cd terraform
+          cd lambda-processor
           terraform apply -auto-approve tfplan
         '''
       }
     }
 
+    // Optional Lambda re-deployment stage
+    // Uncomment if you want Jenkins to re-zip/upload/update the Lambda function
+    /*
     stage('Deploy Lambda') {
       steps {
         sh '''
-          cd lambda
-          zip function.zip lambda_function.py
-          aws s3 cp function.zip s3://$S3_BUCKET/
-          aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key function.zip --region $AWS_REGION
+          cd lambda-processor
+          zip lambda.zip lambda_function.py
+          aws lambda update-function-code \
+            --function-name $FUNCTION_NAME \
+            --zip-file fileb://lambda.zip \
+            --region $AWS_REGION
         '''
       }
     }
+    */
   }
 
   post {
-    failure {
-      echo 'Build failed!'
-    }
     success {
-      echo 'Deployment complete!'
+      echo '✅ Infrastructure deployed successfully!'
+    }
+    failure {
+      echo '❌ Build failed. Check logs above.'
     }
   }
 }
