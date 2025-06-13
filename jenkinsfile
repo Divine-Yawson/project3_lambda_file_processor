@@ -2,7 +2,9 @@ pipeline {
   agent any
 
   environment {
-    AWS_REGION = 'us-east-1'
+    AWS_ACCESS_KEY_ID = credentials('aws-access-key')
+    AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
+    AWS_DEFAULT_REGION = 'us-east-1'
     S3_BUCKET = 'lambda-upload-bucket-1aa59ce9'
     FUNCTION_NAME = 'FileProcessor'
   }
@@ -19,6 +21,7 @@ pipeline {
         sh '''
           sudo yum install -y zip || true
           cd lambda-processor
+          rm -f lambda.zip
           zip lambda.zip lambda_function.py
         '''
       }
@@ -49,7 +52,7 @@ pipeline {
         sh '''
           cd lambda-processor
           aws s3 cp lambda.zip s3://$S3_BUCKET/
-          aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key lambda.zip --region $AWS_REGION
+          aws lambda update-function-code --function-name $FUNCTION_NAME --s3-bucket $S3_BUCKET --s3-key lambda.zip --region $AWS_DEFAULT_REGION
         '''
       }
     }
